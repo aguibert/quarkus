@@ -83,6 +83,7 @@
         <commons-codec.version>1.13</commons-codec.version>
         <classmate.version>1.3.4</classmate.version>
         <hibernate-orm.version>5.4.14.Final</hibernate-orm.version>
+        <hibernate-rx.version>1.0.0-SNAPSHOT</hibernate-rx.version>
         <hibernate-validator.version>6.1.4.Final</hibernate-validator.version>
         <hibernate-search.version>6.0.0.Beta6</hibernate-search.version>
         <narayana.version>5.10.4.Final</narayana.version>
@@ -421,6 +422,11 @@
             <dependency>
                 <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-hibernate-orm</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.quarkus</groupId>
+                <artifactId>quarkus-hibernate-rx</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -2272,6 +2278,11 @@
                 <groupId>org.hibernate</groupId>
                 <artifactId>hibernate-jpamodelgen</artifactId>
                 <version>${hibernate-orm.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.hibernate.rx</groupId>
+                <artifactId>hibernate-rx-core</artifactId>
+                <version>${hibernate-rx.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.hibernate</groupId>
