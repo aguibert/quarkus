@@ -168,6 +168,7 @@ public final class HibernateOrmProcessor {
     @BuildStep
     @Record(STATIC_INIT)
     public void build(RecorderContext recorderContext, HibernateOrmRecorder recorder,
+            Capabilities capabilities,
             List<AdditionalJpaModelBuildItem> additionalJpaModelBuildItems,
             List<NonJpaModelBuildItem> nonJpaModelBuildItems,
             List<IgnorableNonIndexedClasses> ignorableNonIndexedClassesBuildItems,
@@ -219,7 +220,10 @@ public final class HibernateOrmProcessor {
         domainObjectsProducer.produce(domainObjects);
 
         final boolean enableORM = hasEntities(domainObjects, nonJpaModelBuildItems);
-        recorder.callHibernateFeatureInit(enableORM);
+        final boolean enableRX = capabilities.isCapabilityPresent(Capabilities.HIBERNATE_RX);
+        if (!enableRX) {
+            recorder.callHibernateFeatureInit(enableORM);
+        }
 
         if (!enableORM) {
             // we can bail out early
@@ -265,12 +269,14 @@ public final class HibernateOrmProcessor {
         // inspect service files for additional integrators
         Collection<Class<? extends Integrator>> integratorClasses = new LinkedHashSet<>();
         for (String integratorClassName : ServiceUtil.classNamesNamedIn(classLoader, INTEGRATOR_SERVICE_FILE)) {
+            System.out.println("@AGG integrator class: " + integratorClassName);
             integratorClasses.add((Class<? extends Integrator>) recorderContext.classProxy(integratorClassName));
         }
         // inspect service files for service contributors
         Collection<Class<? extends ServiceContributor>> serviceContributorClasses = new LinkedHashSet<>();
         for (String serviceContributorClassName : ServiceUtil.classNamesNamedIn(classLoader,
                 SERVICE_CONTRIBUTOR_SERVICE_FILE)) {
+            System.out.println("@AGG svc contributor: " + serviceContributorClassName);
             serviceContributorClasses
                     .add((Class<? extends ServiceContributor>) recorderContext.classProxy(serviceContributorClassName));
         }
