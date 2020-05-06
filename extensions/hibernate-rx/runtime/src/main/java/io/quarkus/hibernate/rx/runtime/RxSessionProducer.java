@@ -25,6 +25,8 @@ public class RxSessionProducer {
         return rxSessionFactory.openRxSession();
     }
 
+    // TODO: I think this isn't working because we are producing Mutiny.Session as a bean but it has no default ctor
+    // so one is being generated
     @Produces
     @Typed(Mutiny.Session.class)
     @RequestScoped
