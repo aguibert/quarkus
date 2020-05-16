@@ -375,7 +375,7 @@
             </dependency>
             <dependency>
                 <groupId>io.quarkus</groupId>
-                <artifactId>quarkus-hibernate-rx-deployment</artifactId>
+                <artifactId>quarkus-hibernate-reactive-deployment</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
