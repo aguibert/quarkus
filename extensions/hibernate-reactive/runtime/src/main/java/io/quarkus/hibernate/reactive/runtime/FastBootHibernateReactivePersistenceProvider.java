@@ -1,23 +1,19 @@
 package io.quarkus.hibernate.reactive.runtime;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.persistence.EntityManagerFactory;
 import javax.persistence.PersistenceException;
-import javax.persistence.spi.PersistenceProvider;
-import javax.persistence.spi.PersistenceUnitInfo;
-import javax.persistence.spi.ProviderUtil;
 
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.internal.StandardServiceRegistryImpl;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.jpa.boot.spi.EntityManagerFactoryBuilder;
 import org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor;
-import org.hibernate.reactive.boot.service.ReactiveGenerationTarget;
-import org.hibernate.reactive.jpa.impl.DelegatorPersistenceUnitInfo;
+import org.hibernate.reactive.provider.ReactivePersistenceProvider;
+import org.hibernate.reactive.provider.impl.ReactiveProviderChecker;
+import org.hibernate.reactive.provider.service.ReactiveGenerationTarget;
 import org.hibernate.service.internal.ProvidedService;
 import org.hibernate.tool.schema.spi.SchemaManagementTool;
 import org.jboss.logging.Logger;
@@ -25,7 +21,6 @@ import org.jboss.logging.Logger;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.InstanceHandle;
 import io.quarkus.hibernate.orm.runtime.BuildTimeSettings;
-import io.quarkus.hibernate.orm.runtime.FastBootHibernatePersistenceProvider;
 import io.quarkus.hibernate.orm.runtime.IntegrationSettings;
 import io.quarkus.hibernate.orm.runtime.PersistenceUnitsHolder;
 import io.quarkus.hibernate.orm.runtime.RuntimeSettings;
@@ -37,47 +32,50 @@ import io.quarkus.hibernate.reactive.runtime.boot.registry.PreconfiguredReactive
 import io.quarkus.hibernate.reactive.runtime.customized.QuarkusReactiveConnectionPoolInitiator;
 import io.vertx.sqlclient.Pool;
 
-/**
- * This can not inherit from ReactivePersistenceProvider because it references HibernatePersistenceProvider
- * and that would trigger the native-image tool to include all code which could be triggered from using
- * that: we need to be able to fully exclude HibernatePersistenceProvider from the native image.
- */
-final class FastBootHibernateReactivePersistenceProvider implements PersistenceProvider {
+final class FastBootHibernateReactivePersistenceProvider extends ReactivePersistenceProvider {
 
     private static final Logger log = Logger.getLogger(FastBootHibernateReactivePersistenceProvider.class);
 
-    private static final String IMPLEMENTATION_NAME = "org.hibernate.reactive.jpa.impl.ReactivePersistenceProvider";
-
-    private final FastBootHibernatePersistenceProvider delegate = new FastBootHibernatePersistenceProvider();
+    //    @Override
+    //    public EntityManagerFactory createEntityManagerFactory(String emName, Map properties) {
+    //        if (properties == null)
+    //            properties = new HashMap<Object, Object>();
+    //        try {
+    //            // These are pre-parsed during image generation:
+    //            final List<PersistenceUnitDescriptor> units = PersistenceUnitsHolder.getPersistenceUnitDescriptors();
+    //
+    //            for (PersistenceUnitDescriptor unit : units) {
+    //                //if the provider is not set, don't use it as people might want to use Hibernate ORM
+    //                if (IMPLEMENTATION_NAME.equalsIgnoreCase(unit.getProviderClassName()) ||
+    //                        unit.getProviderClassName() == null) {
+    //                    EntityManagerFactoryBuilder emfBuilder = getEntityManagerFactoryBuilderOrNull(emName, properties);
+    //                    EntityManagerFactory emf = emfBuilder.build();
+    //                    return emf;
+    //                }
+    //            }
+    //
+    //            //not the right provider
+    //            return null;
+    //        } catch (PersistenceException pe) {
+    //            throw pe;
+    //        } catch (Exception e) {
+    //            throw new PersistenceException("Unable to build EntityManagerFactory", e);
+    //        }
+    //    }
 
     @Override
-    public EntityManagerFactory createEntityManagerFactory(String emName, Map properties) {
-        if (properties == null)
-            properties = new HashMap<Object, Object>();
-        try {
-            // These are pre-parsed during image generation:
-            final List<PersistenceUnitDescriptor> units = PersistenceUnitsHolder.getPersistenceUnitDescriptors();
-
-            for (PersistenceUnitDescriptor unit : units) {
-                //if the provider is not set, don't use it as people might want to use Hibernate ORM
-                if (IMPLEMENTATION_NAME.equalsIgnoreCase(unit.getProviderClassName()) ||
-                        unit.getProviderClassName() == null) {
-                    EntityManagerFactoryBuilder emfBuilder = getEntityManagerFactoryBuilderOrNull(emName, properties);
-                    EntityManagerFactory emf = emfBuilder.build();
-                    return emf;
-                }
-            }
-
-            //not the right provider
-            return null;
-        } catch (PersistenceException pe) {
-            throw pe;
-        } catch (Exception e) {
-            throw new PersistenceException("Unable to build EntityManagerFactory", e);
-        }
+    protected EntityManagerFactoryBuilder getEntityManagerFactoryBuilder(PersistenceUnitDescriptor persistenceUnitDescriptor,
+            Map integration) {
+        return getEntityManagerFactoryBuilderOrNull(persistenceUnitDescriptor.getName(), integration);
     }
 
-    private EntityManagerFactoryBuilder getEntityManagerFactoryBuilderOrNull(String persistenceUnitName,
+    //	protected EntityManagerFactoryBuilder getEntityManagerFactoryBuilder(PersistenceUnitDescriptor persistenceUnitDescriptor, Map integration) {
+    //		return new FastBootReactiveEntityManagerFactoryBuilder(metadata, persistenceUnitName, standardServiceRegistry, runtimeSettings, validatorFactory, cdiBeanManager, strategy)
+    ////		return new ReactiveEntityManagerFactoryBuilder( persistenceUnitDescriptor, integration );
+    //	}
+
+    @Override
+    protected EntityManagerFactoryBuilder getEntityManagerFactoryBuilderOrNull(String persistenceUnitName,
             Map properties) {
         log.tracef("Attempting to obtain correct EntityManagerFactoryBuilder for persistenceUnitName : %s",
                 persistenceUnitName);
@@ -113,6 +111,7 @@ final class FastBootHibernateReactivePersistenceProvider implements PersistenceP
                 continue;
             }
 
+            // @AGG BEGIN quarkus-specific
             RecordedState recordedState = PersistenceUnitsHolder.getRecordedState(persistenceUnitName);
 
             final PrevalidatedQuarkusMetadata metadata = recordedState.getMetadata();
@@ -137,12 +136,14 @@ final class FastBootHibernateReactivePersistenceProvider implements PersistenceP
                     standardServiceRegistry /* Mostly ignored! (yet needs to match) */,
                     runtimeSettings,
                     validatorFactory, cdiBeanManager, recordedState.getMultiTenancyStrategy());
+            // @AGG END
         }
 
         log.debug("Found no matching persistence units");
         return null;
     }
 
+    // @AGG KEEP
     private StandardServiceRegistry rewireMetadataAndExtractServiceRegistry(RuntimeSettings runtimeSettings,
             RecordedState rs,
             String persistenceUnitName) {
@@ -178,17 +179,21 @@ final class FastBootHibernateReactivePersistenceProvider implements PersistenceP
 
     private boolean isProvider(PersistenceUnitDescriptor persistenceUnit) {
         Map<Object, Object> props = Collections.emptyMap();
-        String requestedProviderName = FastBootHibernatePersistenceProvider.extractRequestedProviderName(persistenceUnit,
-                props);
-        if (requestedProviderName == null) {
+        String requestedProviderName = ReactiveProviderChecker.extractRequestedProviderName(persistenceUnit, props);
+        //        String requestedProviderName2 = FastBootHibernatePersistenceProvider.extractRequestedProviderName(persistenceUnit,
+        //                props);
+        System.out.println("@AGG requested provider name=" + requestedProviderName);
+        System.out.println("@AGG props=" + props);
+        if (requestedProviderName == null || requestedProviderName.isEmpty()) {
             // We'll always assume we are the best possible provider match unless the user
             // explicitly asks for a different one.
             return true;
         }
+        // TODO: Do we want to act as both reactive and non-reactive providers?
         return FastBootHibernateReactivePersistenceProvider.class.getName().equals(requestedProviderName)
-                || IMPLEMENTATION_NAME.equals(requestedProviderName)
-                || FastBootHibernatePersistenceProvider.class.getName().equals(requestedProviderName)
-                || "org.hibernate.jpa.HibernatePersistenceProvider".equals(requestedProviderName);
+                || ReactivePersistenceProvider.class.getName().equals(requestedProviderName);
+        //                || FastBootHibernatePersistenceProvider.class.getName().equals(requestedProviderName)
+        //                || "org.hibernate.jpa.HibernatePersistenceProvider".equals(requestedProviderName);
     }
 
     private void registerVertxPool(String persistenceUnitName,
@@ -208,32 +213,17 @@ final class FastBootHibernateReactivePersistenceProvider implements PersistenceP
         serviceRegistry.addInitiator(new QuarkusReactiveConnectionPoolInitiator(poolHandle.get()));
     }
 
-    @Override
-    public EntityManagerFactory createContainerEntityManagerFactory(PersistenceUnitInfo info, Map map) {
-        final String persistenceProviderClassName = info.getPersistenceProviderClassName();
-        if (persistenceProviderClassName == null || IMPLEMENTATION_NAME.equals(persistenceProviderClassName)) {
-            Map<Object, Object> protectiveCopy = map != null ? new HashMap<Object, Object>(map) : new HashMap<Object, Object>();
-            return delegate.createContainerEntityManagerFactory(
-                    new DelegatorPersistenceUnitInfo(info),
-                    protectiveCopy);
-        }
-        //not the right provider
-        return null;
-    }
-
-    @Override
-    public ProviderUtil getProviderUtil() {
-        return delegate.getProviderUtil();
-    }
-
-    @Override
-    public void generateSchema(PersistenceUnitInfo info, Map map) {
-        throw new IllegalStateException("Hibernate Reactive does not support schema generation");
-    }
-
-    @Override
-    public boolean generateSchema(String persistenceUnitName, Map map) {
-        throw new IllegalStateException("Hibernate Reactive does not support schema generation");
-    }
+    //    @Override
+    //    public EntityManagerFactory createContainerEntityManagerFactory(PersistenceUnitInfo info, Map map) {
+    //        final String persistenceProviderClassName = info.getPersistenceProviderClassName();
+    //        if (persistenceProviderClassName == null || IMPLEMENTATION_NAME.equals(persistenceProviderClassName)) {
+    //            Map<Object, Object> protectiveCopy = map != null ? new HashMap<Object, Object>(map) : new HashMap<Object, Object>();
+    //            return delegate.createContainerEntityManagerFactory(
+    //                    new DelegatorPersistenceUnitInfo(info),
+    //                    protectiveCopy);
+    //        }
+    //        //not the right provider
+    //        return null;
+    //    }
 
 }

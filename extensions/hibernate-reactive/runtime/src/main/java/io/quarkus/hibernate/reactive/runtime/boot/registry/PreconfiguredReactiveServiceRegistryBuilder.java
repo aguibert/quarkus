@@ -23,10 +23,11 @@ import org.hibernate.integrator.spi.Integrator;
 import org.hibernate.internal.EntityManagerMessageLogger;
 import org.hibernate.persister.internal.PersisterFactoryInitiator;
 import org.hibernate.property.access.internal.PropertyAccessStrategyResolverInitiator;
-import org.hibernate.reactive.boot.service.NoJdbcConnectionProviderInitiator;
-import org.hibernate.reactive.boot.service.ReactiveQueryTranslatorFactoryInitiator;
 import org.hibernate.reactive.id.impl.ReactiveIdentifierGeneratorFactoryInitiator;
-import org.hibernate.reactive.jpa.impl.ReactivePersisterClassResolverInitiator;
+import org.hibernate.reactive.provider.service.NoJdbcConnectionProviderInitiator;
+import org.hibernate.reactive.provider.service.ReactiveMarkerServiceInitiator;
+import org.hibernate.reactive.provider.service.ReactivePersisterClassResolverInitiator;
+import org.hibernate.reactive.provider.service.ReactiveQueryTranslatorFactoryInitiator;
 import org.hibernate.resource.beans.spi.ManagedBeanRegistryInitiator;
 import org.hibernate.resource.transaction.internal.TransactionCoordinatorBuilderInitiator;
 import org.hibernate.service.internal.ProvidedService;
@@ -206,6 +207,8 @@ public class PreconfiguredReactiveServiceRegistryBuilder {
         serviceInitiators.add(EntityCopyObserverFactoryInitiator.INSTANCE);
 
         serviceInitiators.add(ReactiveIdentifierGeneratorFactoryInitiator.INSTANCE);
+
+        serviceInitiators.add(ReactiveMarkerServiceInitiator.INSTANCE);
 
         serviceInitiators.trimToSize();
         return serviceInitiators;
